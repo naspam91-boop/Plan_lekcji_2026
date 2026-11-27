@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Plan Lekcji – Karolina, Klara, Lidka, Kornelia</title>
+    <!-- Tailwind CSS dla responsywnego i nowoczesnego wyglądu -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Czcionka Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: #f1f5f9;
+            color: #0f172a;
+            -webkit-tap-highlight-color: transparent;
+            overscroll-behavior-y: contain;
+        }
+        /* Płynne przejścia i animacja pulsowania dla aktywnej lekcji */
+        @keyframes pulse-soft {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.45; }
+        }
+        .live-dot {
+            animation: pulse-soft 2s infinite ease-in-out;
+        }
+        /* Ukrycie paska przewijania na poziomych elementach */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="min-h-screen pb-10 select-none">
+
+    <!-- GÓRNY NAGŁÓWEK (Sticky) -->
+    <header class="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm">
+        <div class="max-w-lg mx-auto px-4 pt-3 pb-2.5">
+            <!-- Wiersz 1: Zegar na żywo, data oraz przycisk symulatora godziny -->
+            <div class="flex items-center justify-between gap-2 mb-2.5">
+                <div>
+                    <div class="flex items-baseline gap-2">
+                        <span id="liveClock" class="text-2xl font-extrabold tracking-tight text-slate-900 tabular-nums">--:--:--</span>
+                        <span id="simBadge" class="hidden text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300">
+                            Symulacja
+                        </span>
+                    </div>
+                    <p id="liveDate" class="text-xs font-medium text-slate-500 capitalize">Ładowanie daty...</p>
+                </div>
+
+                <div class="flex items-center gap-1.5">
+                    <!-- Przycisk rozwijania/zwijania wszystkich planów dnia -->
+                    <button id="toggleAllPlansBtn" type="button" title="Rozwiń lub zwiń pełne plany"
+                        class="px-2.5 py-2 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 transition">
+                        Cały dzień
+                    </button>
+                    <!-- Przycisk symulatora godziny -->
+                    <button id="toggleSimBtn" type="button" title="Symuluj inną godzinę"
+                        class="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 transition flex items-center gap-1">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Panel symulatora godziny (domyślnie ukryty) -->
+            <div id="simPanel" class="hidden mb-2.5 p-3 rounded-2xl bg-amber-50 border border-amber-200">
+                <div class="flex items-center justify-between mb-1.5">
+                    <span class="text-xs font-bold text-amber-900">Testuj godzinę: <span id="simTimeLabel" class="underline">10:30</span></span>
+                    <button id="resetSimBtn" type="button" class="text-xs font-semibold text-amber-800 hover:text-amber-950 bg-amber-200/70 px-2.5 py-1 rounded-lg">
+                        Wróć do teraz
+                    </button>
+                </div>
+                <input id="simSlider" type="range" min="450" max="980" value="630" step="5"
+                    class="w-full accent-amber-600 cursor-pointer h-2 bg-amber-200 rounded-lg">
+                <div class="flex justify-between text-[10px] font-medium text-amber-700 mt-1">
+                    <span>07:30</span>
+                    <span>09:30</span>
+                    <span>12:00</span>
+                    <span>14:30</span>
+                    <span>16:20</span>
+                </div>
+            </div>
+
+            <!-- Baner weekendowy (jeśli sobota/niedziela) -->
+            <div id="weekendBanner" class="hidden mb-2 px-3 py-1.5 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-800 text-xs font-semibold text-center">
+                Weekend – podgląd na Poniedziałek
+            </div>
+
+            <!-- Selektor dni tygodnia (Pn - Pt) -->
+            <div class="grid grid-cols-5 gap-1.5 bg-slate-100 p-1 rounded-2xl" role="tablist" aria-label="Dni tygodnia">
+                <button type="button" data-day="1" class="day-pill py-2 rounded-xl text-sm font-bold transition text-center">Pn</button>
+                <button type="button" data-day="2" class="day-pill py-2 rounded-xl text-sm font-bold transition text-center">Wt</button>
+                <button type="button" data-day="3" class="day-pill py-2 rounded-xl text-sm font-bold transition text-center">Śr</button>
+                <button type="button" data-day="4" class="day-pill py-2 rounded-xl text-sm font-bold transition text-center">Czw</button>
+                <button type="button" data-day="5" class="day-pill py-2 rounded-xl text-sm font-bold transition text-center">Pt</button>
+            </div>
+        </div>
+    </header>
+
+    <!-- GŁÓWNY KONTENER (Obsługuje przesuwanie palcem lewo/prawo) -->
+    <main id="swipeArea" class="max-w-lg mx-auto px-4 pt-3 space-y-3">
+
+        <!-- PASEK PODSUMOWANIA: Kto i kiedy kończy zajęcia obowiązkowe -->
+        <section class="bg-white rounded-2xl p-3.5 border border-slate-200/90 shadow-sm">
+            <div class="flex items-center justify-between mb-2">
+                <h2 class="text-xs font-bold uppercase tracking-wider text-slate-500">
+                    Koniec obowiązkowych (<span id="summaryDayName" class="text-slate-800">Poniedziałek</span>)
+                </h2>
+                <span class="text-[11px] text-slate-400">przesuń bokiem, by zmienić dzień</span>
+            </div>
+            <div id="endTimesSummary" class="flex flex-wrap gap-2">
+                <!-- Wypełniane dynamicznie przez JS -->
+            </div>
+        </section>
+
+        <!-- KARTY 4 DZIECI -->
+        <section id="kidsContainer" class="space-y-3">
+            <!-- Wypełniane dynamicznie przez JS -->
+        </section>
+
+        <!-- LEGENDA / INFORMACJA -->
+        <footer class="pt-2 pb-4 text-center text-[11px] text-slate-400 space-y-1">
+            <p>Uwzględniono wyłącznie lekcje obowiązkowe oraz basen.</p>
+            <p>Powrót z basenu: Lidka i Kornelia o <strong>14:00</strong> • Karolina i Klara o <strong>14:55</strong>.</p>
+        </footer>
+    </main>
+
+    <script>
+        /**
+         * KONFIGURACJA DZWONKÓW I PRZERW
+         * Godziny lekcji i przerw zgodnie ze szkołą dziewczynek.
+         */
+        const BELL_SCHEDULE = [
+            { num: 1, start: "08:15", end: "09:00" },
+            { num: 2, start: "09:10", end: "09:55" },
+            { num: 3, start: "10:10", end: "10:55" },
+            { num: 4, start: "11:05", end: "11:50" },
+            { num: 5, start: "12:00", end: "12:45" },
+            { num: 6, start: "13:15", end: "14:00" },
+            { num: 7, start: "14:10", end: "14:55" },
+            { num: 8, start: "15:00", end: "15:45" }
+        ];
+
+        const DAY_NAMES = {
+            1: "Poniedziałek",
+            2: "Wtorek",
+            3: "Środa",
+            4: "Czwartek",
+            5: "Piątek"
+        };
+
+        /**
+         * PEŁNE DANE PLANU LEKCJI (TYLKO ZAJĘCIA OBOWIĄZKOWE + BASEN)
+         * Każdy wpis zawiera:
+         * - slotLabel: numer lekcji (np. "1" lub "6–7")
+         * - start: godzina rozpoczęcia
+         * - end: godzina zakończenia (dla basenu skorygowana do faktycznego powrotu: 14:55 lub 14:00)
+         * - code: skrót z planu
+         * - name: pełna nazwa przedmiotu
+         * - isPool: flaga wyróżniająca basen
+         */
+        const KIDS_DATA = [
+            {
+                id: "karolina",
+                name: "Karolina",
+                className: "V B",
+                accentBg: "bg-pink-50",
+                accentText: "text-pink-700",
+                accentBorder: "border-pink-200",
+                badgeBg: "bg-pink-600",
+                schedule: {
+                    1: [ // Poniedziałek
+                        { slot: "1", start: "08:15", end: "09:00", code: "biol", name: "Biologia" },
+                        { slot: "2", start: "09:10", end: "09:55", code: "mat", name: "Matematyka" },
+                        { slot: "3", start: "10:10", end: "10:55", code: "mat", name: "Matematyka" },
+                        { slot: "4", start: "11:05", end: "11:50", code: "wf", name: "WF" },
+                        { slot: "5", start: "12:00", end: "12:45", code: "hist", name: "Historia" },
+                        { slot: "6", start: "13:15", end: "14:00", code: "ja", name: "Język angielski" },
+                        { slot: "7", start: "14:10", end: "14:55", code: "inf", name: "Informatyka" }
+                    ],
+                    2: [ // Wtorek (start od 2. lekcji - 09:10)
+                        { slot: "2", start: "09:10", end: "09:55", code: "jp", name: "Język polski" },
+                        { slot: "3", start: "10:10", end: "10:55", code: "hist", name: "Historia" },
+                        { slot: "4", start: "11:05", end: "11:50", code: "ja", name: "Język angielski" },
+                        { slot: "5", start: "12:00", end: "12:45", code: "wf", name: "WF" },
+                        { slot: "6", start: "13:15", end: "14:00", code: "geo", name: "Geografia" },
+                        { slot: "7", start: "14:10", end: "14:55", code: "ez", name: "Edukacja zdrowotna" },
+                        { slot: "8", start: "15:00", end: "15:45", code: "jn", name: "Język niemiecki" }
+                    ],
+                    3: [ // Środa
+                        { slot: "1", start: "08:15", end: "09:00", code: "mat", name: "Matematyka" },
+                        { slot: "2", start: "09:10", end: "09:55", code: "plast", name: "Plastyka" },
+                        { slot: "3", start: "10:10", end: "10:55", code: "muz", name: "Muzyka" },
+                        { slot: "4", start: "11:05", end: "11:50", code: "ja", name: "Język angielski" },
+                        { slot: "5", start: "12:00", end: "12:45", code: "ja", name: "Język angielski" },
+                        { slot: "6", start: "13:15", end: "14:00", code: "jp", name: "Język polski" },
+                        { slot: "7", start: "14:10", end: "14:55", code: "jp", name: "Język polski" }
+                    ],
+                    4: [ // Czwartek (Basen - powrót 14:55)
+                        { slot: "1", start: "08:15", end: "09:00", code: "wf", name: "WF" },
+                        { slot: "2", start: "09:10", end: "09:55", code: "jp", name: "Język polski" },
+                        { slot: "3", start: "10:10", end: "10:55", code: "rel", name: "Religia" },
+                        { slot: "4", start: "11:05", end: "11:50", code: "mat", name: "Matematyka" },
+                        { slot: "5", start: "12:00", end: "12:45", code: "mat", name: "Matematyka" },
+                        { slot: "6–7", start: "13:15", end: "14:55", code: "bas", name: "Basen (powrót 14:55)", isPool: true }
+                    ],
+                    5: [ // Piątek
+                        { slot: "1", start: "08:15", end: "09:00", code: "gw", name: "Godzina wychowawcza" },
+                        { slot: "2", start: "09:10", end: "09:55", code: "wf", name: "WF" },
+                        { slot: "3", start: "10:10", end: "10:55", code: "tech", name: "Technika" },
+                        { slot: "4", start: "11:05", end: "11:50", code: "ja", name: "Język angielski" },
+                        { slot: "5", start: "12:00", end: "12:45", code: "rel", name: "Religia" },
+                        { slot: "6", start: "13:15", end: "14:00", code: "jn", name: "Język niemiecki" },
+                        { slot: "7", start: "14:10", end: "14:55", code: "jp", name: "Język polski" }
+                    ]
+                }
+            },
+            {
+                id: "klara",
+                name: "Klara",
+                className: "IV B",
+                accentBg: "bg-emerald-50",
+                accentText: "text-emerald-700",
+                accentBorder: "border-emerald-200",
+                badgeBg: "bg-emerald-600",
+                schedule: {
+                    1: [ // Poniedziałek
+                        { slot: "1", start: "08:15", end: "09:00", code: "mat", name: "Matematyka" },
+                        { slot: "2", start: "09:10", end: "09:55", code: "ja", name: "Język angielski" },
+                        { slot: "3", start: "10:10", end: "10:55", code: "jn", name: "Język niemiecki" },
+                        { slot: "4", start: "11:05", end: "11:50", code: "jp", name: "Język polski" },
+                        { slot: "5", start: "12:00", end: "12:45", code: "ja", name: "Język angielski" }
+                    ],
+                    2: [ // Wtorek
+                        { slot: "1", start: "08:15", end: "09:00", code: "hist", name: "Historia" },
+                        { slot: "2", start: "09:10", end: "09:55", code: "mat", name: "Matematyka" },
+                        { slot: "3", start: "10:10", end: "10:55", code: "mat", name: "Matematyka" },
+                        { slot: "4", start: "11:05", end: "11:50", code: "jp", name: "Język polski" },
+                        { slot: "5", start: "12:00", end: "12:45", code: "ez", name: "Edukacja zdrowotna" },
+                        { slot: "6", start: "13:15", end: "14:00", code: "muz", name: "Muzyka" },
+                        { slot: "7", start: "14:10", end: "14:55", code: "wf", name: "WF" },
+                        { slot: "8", start: "15:00", end: "15:45", code: "wf", name: "WF" }
+                    ],
+                    3: [ // Środa (Basen - powrót 14:55)
+                        { slot: "1", start: "08:15", end: "09:00", code: "wf", name: "WF" },
+                        { slot: "2", start: "09:10", end: "09:55", code: "ja", name: "Język angielski" },
+                        { slot: "3", start: "10:10", end: "10:55", code: "rel", name: "Religia" },
+                        { slot: "4", start: "11:05", end: "11:50", code: "jp", name: "Język polski" },
+                        { slot: "5", start: "12:00", end: "12:45", code: "plast", name: "Plastyka" },
+                        { slot: "6–7", start: "13:15", end: "14:55", code: "bas", name: "Basen (powrót 14:55)", isPool: true }
+                    ],
+                    4: [ // Czwartek (start od 2. lekcji - 09:10)
+                        { slot: "2", start: "09:10", end: "09:55", code: "ja", name: "Język angielski" },
+                        { slot: "3", start: "10:10", end: "10:55", code: "mat", name: "Matematyka" },
+                        { slot: "4", start: "11:05", end: "11:50", code: "przyr", name: "Przyroda" },
+                        { slot: "5", start: "12:00", end: "12:45", code: "jp", name: "Język polski" },
+                        { slot: "6", start: "13:15", end: "14:00", code: "rel", name: "Religia" },
+                        { slot: "7", start: "14:10", end: "14:55", code: "ZPT", name: "ZPT" },
+                        { slot: "8", start: "15:00", end: "15:45", code: "ZPT", name: "ZPT" }
+                    ],
+                    5: [ // Piątek
+                        { slot: "1", start: "08:15", end: "09:00", code: "gw", name: "Godzina wychowawcza" },
+                        { slot: "2", start: "09:10", end: "09:55", code: "ja", name: "Język angielski" },
+                        { slot: "3", start: "10:10", end: "10:55", code: "inf", name: "Informatyka" },
+                        { slot: "4", start: "11:05", end: "11:50", code: "jp", name: "Język polski" },
+                        { slot: "5", start: "12:00", end: "12:45", code: "jn", name: "Język niemiecki" },
+                        { slot: "6", start: "13:15", end: "14:00", code: "przyr", name: "Przyroda" },
+                        { slot: "7", start: "14:10", end: "14:55", code: "przyr", name: "Przyroda" },
+                        { slot: "8", start: "15:00", end: "15:45", code: "wf", name: "WF" }
+                    ]
+                }
+            },
+            {
+                id: "lidka",
+                name: "Lidka",
+                className: "II A",
+                accentBg: "bg-amber-50",
+                accentText: "text-amber-700",
+                accentBorder: "border-amber-200",
+                badgeBg: "bg-amber-600",
+                schedule: {
+                    1: [ // Poniedziałek
+                        { slot: "1", start: "08:15", end: "09:00", code: "EW", name: "Edukacja wczesnoszkolna" },
+                        { slot: "2", start: "09:10", end: "09:55", code: "EW", name: "Edukacja wczesnoszkolna" },
+                        { slot: "3", start: "10:10", end: "10:55", code: "EW", name: "Edukacja wczesnoszkolna" },
+                        { slot: "4", start: "11:05", end: "11:50", code: "ja", name: "Język angielski" },
+                        { slot: "5", start: "12:00", end: "12:45", code: "ja", name: "Język angielski" },
+                        { slot: "6", start: "13:15", end: "14:00", code: "EW", name: "Edukacja wczesnoszkolna" }
+                    ],
+                    2: [ // Wtorek
+                        { slot: "1", start: "08:15", end: "09:00", code: "EW", name: "Edukacja wczesnoszkolna" },
+                        { slot: "2", start: "09:10", end: "09:55", code: "EW", name: "Edukacja wczesnoszkolna" },
+                        { slot: "3", start: "10:10", end: "10:55", code: "EW", name: "Edukacja wczesnoszkolna" },
+                        { slot: "4", start: "11:05", end: "11:50", code: "EW", name: "Edukacja wczesnoszkolna" },
+                        { slot: "5", start: "12:00", end: "12:45", code: "EW", name: "Edukacja wczesnoszkolna" },
+                        { slot: "6", start: "13:15", end: "14:00", code: "ja", name: "Język angielski" }
+                    ],
+                    3: [ // Środa
+                        { slot: "1", start: "08:15", end: "09:00", code: "EW", name: "Edukacja wczesnoszkolna" },
+                        { slot: "2", start: "09:10", end: "09:55", code: "EW", name: "Edukacja wczesnoszkolna" },
+                        { slot: "3", start: "10:10", end: "10:55", code: "EW", name: "Edukacja wczesnoszkolna" },
+                        { slot: "4", start: "11:05", end: "11:50", code: "EW", name: "Edukacja wczesnoszkolna" },
+                        { slot: "5", start: "12:00", end: "12:45", code: "EW", name: "Edukacja wczesnoszkolna" },
+                        { slot: "6", start: "13:15", end: "14:00", code: "rel", name: "Religia" }
+                    ],
+                    4: [ // Czwartek (Basen - powrót 14:00)
+                        { slot: "1", start: "08:15", end: "09:00", code: "EW", name: "Edukacja wczesnoszkolna" },
+                        { slot: "2", start: "09:10", end: "09:55", code: "EW", name: "Edukacja wczesnoszkolna" },
+                        { slot: "3", start: "10:10", end: "10:55", code: "rel", name: "Religia" },
+                        { slot: "4", start: "11:05", end: "11:50", code: "ja", name: "Język angielski" },
+                        { slot: "5–6", start: "12:00", end: "14:00", code: "bas", name: "Basen (powrót 14:00)", isPool: true }
+                    ],
+                    5: [ // Piątek (5 lekcji EW do 12:45)
+                        { slot: "1", start: "08:15", end: "09:00", code: "EW", name: "Edukacja wczesnoszkolna" },
+                        { slot: "2", start: "09:10", end: "09:55", code: "EW", name: "Edukacja wczesnoszkolna" },
+                        { slot: "3", start: "10:10", end: "10:55", code: "EW", name: "Edukacja wczesnoszkolna" },
+                        { slot: "4", start: "11:05", end: "11:50", code: "EW", name: "Edukacja wczesnoszkolna" },
+                        { slot: "5", start: "12:00", end: "12:45", code: "EW", name: "Edukacja wczesnoszkolna" }
+                    ]
+                }
+            },
+            {
+                id: "kornelia",
+                name: "Kornelia",
+                nickname: "Nela",
+                className: "I A",
+                accentBg: "bg-purple-50",
+                accentText: "text-purple-700",
+                accentBorder: "border-purple-200",
+                badgeBg: "bg-purple-600",
+                schedule: {
+                    1: [ // Poniedziałek (start o 09:10)
+                        { slot: "2", start: "09:10", end: "09:55", code: "EW", name: "Edukacja wczesnoszkolna" },
+                        { slot: "3", start: "10:10", end: "10:55", code: "EW", name: "Edukacja wczesnoszkolna" },
+                        { slot: "4", start: "11:05", end: "11:50", code: "EW", name: "Edukacja wczesnoszkolna" },
+                        { slot: "5", start: "12:00", end: "12:45", code: "EW", name: "Edukacja wczesnoszkolna" },
+                        { slot: "6", start: "13:15", end: "14:00", code: "ja", name: "Język angielski" },
+                        { slot: "7", start: "14:10", end: "14:55", code: "ja", name: "Język angielski" }
+                    ],
+                    2: [ // Wtorek (start o 09:10)
+                        { slot: "2", start: "09:10", end: "09:55", code: "EW", name: "Edukacja wczesnoszkolna" },
+                        { slot: "3", start: "10:10", end: "10:55", code: "EW", name: "Edukacja wczesnoszkolna" },
+                        { slot: "4", start: "11:05", end: "11:50", code: "EW", name: "Edukacja wczesnoszkolna" },
+                        { slot: "5", start: "12:00", end: "12:45", code: "EW", name: "Edukacja wczesnoszkolna" },
+                        { slot: "6", start: "13:15", end: "14:00", code: "EW", name: "Edukacja wczesnoszkolna" }
+                    ],
+                    3: [ // Środa (start o 09:10, Basen - powrót 14:00)
+                        { slot: "2", start: "09:10", end: "09:55", code: "EW", name: "Edukacja wczesnoszkolna" },
+                        { slot: "3", start: "10:10", end: "10:55", code: "EW", name: "Edukacja wczesnoszkolna" },
+                        { slot: "4", start: "11:05", end: "11:50", code: "EW", name: "Edukacja wczesnoszkolna" },
+                        { slot: "5–6", start: "12:00", end: "14:00", code: "bas", name: "Basen (powrót 14:00)", isPool: true }
+                    ],
+                    4: [ // Czwartek (start o 09:10)
+                        { slot: "2", start: "09:10", end: "09:55", code: "EW", name: "Edukacja wczesnoszkolna" },
+                        { slot: "3", start: "10:10", end: "10:55", code: "EW", name: "Edukacja wczesnoszkolna" },
+                        { slot: "4", start: "11:05", end: "11:50", code: "EW", name: "Edukacja wczesnoszkolna" },
+                        { slot: "5", start: "12:00", end: "12:45", code: "rel", name: "Religia" },
+                        { slot: "6", start: "13:15", end: "14:00", code: "EW", name: "Edukacja wczesnoszkolna" }
+                    ],
+                    5: [ // Piątek (start o 09:10)
+                        { slot: "2", start: "09:10", end: "09:55", code: "EW", name: "Edukacja wczesnoszkolna" },
+                        { slot: "3", start: "10:10", end: "10:55", code: "EW", name: "Edukacja wczesnoszkolna" },
+                        { slot: "4", start: "11:05", end: "11:50", code: "EW", name: "Edukacja wczesnoszkolna" },
+                        { slot: "5", start: "12:00", end: "12:45", code: "rel", name: "Religia" },
+                        { slot: "6", start: "13:15", end: "14:00", code: "EW", name: "Edukacja wczesnoszkolna" }
+                    ]
+                }
+            }
+        ];
+
+        /**
+         * STAN APLIKACJI
+         */
+        let selectedDay = getInitialSchoolDay();
+        let isSimulatedTime = false;
+        let simulatedMinutes = 10 * 60 + 30; // Domyślnie 10:30 dla testów
+        let expandedCards = {}; // Stan rozwinięcia poszczególnych kart
+        let allExpanded = false;
+
+        /**
+         * FUNKCJE POMOCNICZE CZASU
+         */
+        function getInitialSchoolDay() {
+            const jsDay = new Date().getDay(); // 0 = Nd, 1 = Pn ... 6 = Sob
+            if (jsDay >= 1 && jsDay <= 5) return jsDay;
+            return 1; // W weekend domyślnie Poniedziałek
+        }
+
+        function isActualWeekend() {
+            const jsDay = new Date().getDay();
+            return jsDay === 0 || jsDay === 6;
+        }
+
+        function timeToMinutes(hhmm) {
+            const [h, m] = hhmm.split(":").map(Number);
+            return h * 60 + m;
+        }
+
+        function minutesToHHMM(totalMinutes) {
+            const h = Math.floor(totalMinutes / 60);
+            const m = totalMinutes % 60;
+            return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+        }
+
+        function getCurrentTimeInfo() {
+            const now = new Date();
+            if (isSimulatedTime) {
+                const h = Math.floor(simulatedMinutes / 60);
+                const m = simulatedMinutes % 60;
+                return {
+                    minutes: simulatedMinutes,
+                    seconds: 0,
+                    formatted: `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:00`,
+                    isTodayActive: true // Podczas symulacji zawsze pokazujemy status na żywo dla wybranego dnia
+                };
+            }
+            const h = now.getHours();
+            const m = now.getMinutes();
+            const s = now.getSeconds();
+            const jsDay = now.getDay();
+            return {
+                minutes: h * 60 + m,
+                seconds: s,
+                formatted: `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`,
+                isTodayActive: (jsDay === selectedDay)
+            };
+        }
+
+        function formatPolishDate(date) {
+            const days = ["Niedziela", "Poniedziałek", "Wtorek", "Środa", "Czwartek", "Piątek", "Sobota"];
+            const months = [
+                "stycznia", "lutego", "marca", "kwietnia", "maja", "czerwca",
+                "lipca", "sierpnia", "września", "października", " listopada", "grudnia"
+            ];
+            return `${days[date.getDay()]}, ${date.getDate()} ${months[date.getMonth()].trim()} ${date.getFullYear()}`;
+        }
+
+        /**
+         * ANALIZA STATUSU UCZNIA W DANEJ CHWILI
+         */
+        function getChildStatus(lessons, currentMinutes, isTodayActive) {
+            if (!lessons || lessons.length === 0) {
+                return { state: "FREE", title: "Brak lekcji obowiązkowych", subtitle: "" };
+            }
+
+            const firstLesson = lessons[0];
+            const lastLesson = lessons[lessons.length - 1];
+            const dayStartMin = timeToMinutes(firstLesson.start);
+            const dayEndMin = timeToMinutes(lastLesson.end);
+
+            // Jeśli podglądamy inny dzień tygodnia (nie dzisiaj i brak symulacji)
+            if (!isTodayActive) {
+                return {
+                    state: "PREVIEW",
+                    start: firstLesson.start,
+                    end: lastLesson.end,
+                    firstLesson,
+                    lastLesson
+                };
+            }
+
+            // 1. Przed rozpoczęciem zajęć
+            if (currentMinutes < dayStartMin) {
+                const diff = dayStartMin - currentMinutes;
+                const diffText = diff <= 90 ? ` (za ${diff} min)` : "";
+                return {
+                    state: "BEFORE",
+                    title: `Przed lekcjami • Start o ${firstLesson.start}${diffText}`,
+                    subtitle: `1. zajęcia: ${firstLesson.name}`,
+                    nextLesson: firstLesson
+                };
+            }
+
+            // 2. Po zakończeniu zajęć obowiązkowych
+            if (currentMinutes >= dayEndMin) {
+                return {
+                    state: "AFTER",
+                    title: `Po lekcjach obowiązkowych`,
+                    subtitle: `Skończyła o ${lastLesson.end}`,
+                    endTime: lastLesson.end
+                };
+            }
+
+            // 3. W trakcie konkretnej lekcji (lub basenu)
+            for (let i = 0; i < lessons.length; i++) {
+                const l = lessons[i];
+                const lStart = timeToMinutes(l.start);
+                const lEnd = timeToMinutes(l.end);
+
+                if (currentMinutes >= lStart && currentMinutes < lEnd) {
+                    const minsLeft = lEnd - currentMinutes;
+                    const nextL = lessons[i + 1] || null;
+                    return {
+                        state: "IN_CLASS",
+                        lesson: l,
+                        minsLeft,
+                        nextLesson: nextL,
+                        activeIndex: i
+                    };
+                }
+            }
+
+            // 4. Na przerwie między lekcjami
+            for (let i = 0; i < lessons.length - 1; i++) {
+                const prevL = lessons[i];
+                const nextL = lessons[i + 1];
+                const breakStart = timeToMinutes(prevL.end);
+                const breakEnd = timeToMinutes(nextL.start);
+
+                if (currentMinutes >= breakStart && currentMinutes < breakEnd) {
+                    const minsLeft = breakEnd - currentMinutes;
+                    return {
+                        state: "BREAK",
+                        breakEnd: nextL.start,
+                        minsLeft,
+                        nextLesson: nextL,
+                        nextIndex: i + 1
+                    };
+                }
+            }
+
+            return { state: "AFTER", title: "Po lekcjach obowiązkowych", subtitle: `Skończyła o ${lastLesson.end}` };
+        }
+
+        /**
+         * RENDEROWANIE INTERFEJSU
+         */
+        function renderApp() {
+            const timeInfo = getCurrentTimeInfo();
+            const now = new Date();
+
+            // Zegar i data
+            document.getElementById("liveClock").textContent = timeInfo.formatted;
+            document.getElementById("liveDate").textContent = formatPolishDate(now);
+            document.getElementById("summaryDayName").textContent = DAY_NAMES[selectedDay];
+
+            // Baner weekendowy
+            const weekendBanner = document.getElementById("weekendBanner");
+            if (isActualWeekend() && !isSimulatedTime && selectedDay === 1) {
+                weekendBanner.classList.remove("hidden");
+            } else {
+                weekendBanner.classList.add("hidden");
+            }
+
+            // Podświetlenie aktywnego dnia w selektorze
+            const todayJsDay = now.getDay();
+            document.querySelectorAll(".day-pill").forEach(btn => {
+                const dayNum = Number(btn.dataset.day);
+                const isSelected = dayNum === selectedDay;
+                const isRealToday = dayNum === todayJsDay;
+
+                btn.className = "day-pill py-2 rounded-xl text-sm font-bold transition text-center relative ";
+                if (isSelected) {
+                    btn.className += "bg-slate-900 text-white shadow-sm";
+                } else {
+                    btn.className += "text-slate-600 hover:bg-slate-200/70";
+                }
+
+                // Mała kropka pod dzisiejszym dniem tygodnia, jeśli oglądamy inny dzień
+                if (isRealToday && !isSelected) {
+                    btn.innerHTML = `${btn.textContent.replace("•", "")}<span class="block w-1 h-1 rounded-full bg-sky-500 mx-auto mt-0.5"></span>`;
+                } else {
+                    btn.textContent = ["", "Pn", "Wt", "Śr", "Czw", "Pt"][dayNum];
+                }
+            });
+
+            // 1. PASEK PODSUMOWANIA KOŃCA LEKCJI (pogrupowany chronologicznie)
+            const summaryMap = {};
+            KIDS_DATA.forEach(kid => {
+                const dayLessons = kid.schedule[selectedDay] || [];
+                if (dayLessons.length > 0) {
+                    const endTime = dayLessons[dayLessons.length - 1].end;
+                    const hasPool = dayLessons.some(l => l.isPool);
+                    if (!summaryMap[endTime]) summaryMap[endTime] = [];
+                    summaryMap[endTime].push({ name: kid.name, hasPool });
+                }
+            });
+
+            const sortedEndTimes = Object.keys(summaryMap).sort((a, b) => timeToMinutes(a) - timeToMinutes(b));
+            const summaryContainer = document.getElementById("endTimesSummary");
+            summaryContainer.innerHTML = sortedEndTimes.map(time => {
+                const kidsList = summaryMap[time].map(k =>
+                    k.hasPool ? `${k.name} <span title="Basen">🏊</span>` : k.name
+                ).join(", ");
+
+                return `
+                    <div class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-100 border border-slate-200/80 text-xs">
+                        <span class="font-extrabold text-slate-900 tabular-nums">${time}</span>
+                        <span class="text-slate-400">–</span>
+                        <span class="font-semibold text-slate-700">${kidsList}</span>
+                    </div>
+                `;
+            }).join("");
+
+            // 2. KARTY DZIECI
+            const kidsContainer = document.getElementById("kidsContainer");
+            kidsContainer.innerHTML = KIDS_DATA.map(kid => {
+                const lessons = kid.schedule[selectedDay] || [];
+                const firstLesson = lessons[0];
+                const lastLesson = lessons[lessons.length - 1];
+                const hasPool = lessons.some(l => l.isPool);
+                const startsLate = firstLesson && firstLesson.start !== "08:15";
+                const status = getChildStatus(lessons, timeInfo.minutes, timeInfo.isTodayActive);
+                const isExpanded = allExpanded || !!expandedCards[kid.id];
+
+                // Budowa głównego boxa statusu
+                let statusHtml = "";
+
+                if (status.state === "IN_CLASS") {
+                    const isPoolNow = status.lesson.isPool;
+                    const boxStyle = isPoolNow
+                        ? "bg-sky-50 border-sky-300 text-sky-950"
+                        : "bg-emerald-50/80 border-emerald-200 text-slate-900";
+                    const dotColor = isPoolNow ? "bg-sky-500" : "bg-emerald-500";
+                    const labelColor = isPoolNow ? "text-sky-700" : "text-emerald-700";
+
+                    statusHtml = `
+                        <div class="mt-2.5 p-3 rounded-xl border ${boxStyle}">
+                            <div class="flex items-center justify-between gap-2 mb-1">
+                                <span class="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider ${labelColor}">
+                                    <span class="w-2 h-2 rounded-full ${dotColor} live-dot"></span>
+                                    ${isPoolNow ? "🏊 Teraz na basenie" : `Lekcja ${status.lesson.slot} • Teraz trwa`}
+                                </span>
+                                <span class="text-xs font-bold tabular-nums ${labelColor}">
+                                    koniec za ${status.minsLeft} min
+                                </span>
+                            </div>
+                            <div class="text-lg font-extrabold leading-tight">
+                                ${status.lesson.name}
+                            </div>
+                            <div class="mt-1 flex flex-wrap items-center justify-between gap-1 text-xs text-slate-600">
+                                <span>do <strong>${status.lesson.end}</strong></span>
+                                ${status.nextLesson
+                                    ? `<span>Potem: <strong class="text-slate-800">${status.nextLesson.isPool ? "🏊 Basen" : status.nextLesson.name}</strong> (${status.nextLesson.start})</span>`
+                                    : `<span class="font-semibold text-emerald-700">To ostatnia lekcja dziś!</span>`
+                                }
+                            </div>
+                        </div>
+                    `;
+                } else if (status.state === "BREAK") {
+                    statusHtml = `
+                        <div class="mt-2.5 p-3 rounded-xl border bg-amber-50/90 border-amber-200 text-amber-950">
+                            <div class="flex items-center justify-between gap-2 mb-1">
+                                <span class="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-amber-700">
+                                    ☕ Przerwa
+                                </span>
+                                <span class="text-xs font-bold tabular-nums text-amber-800">
+                                    jeszcze ${status.minsLeft} min (do ${status.breakEnd})
+                                </span>
+                            </div>
+                            <div class="text-sm font-bold text-slate-800">
+                                Za chwilę: <span class="text-base font-extrabold text-slate-950">${status.nextLesson.isPool ? "🏊 Basen" : status.nextLesson.name}</span>
+                            </div>
+                        </div>
+                    `;
+                } else if (status.state === "BEFORE") {
+                    statusHtml = `
+                        <div class="mt-2.5 p-3 rounded-xl border bg-slate-50 border-slate-200 text-slate-800">
+                            <div class="text-xs font-bold text-indigo-700">${status.title}</div>
+                            <div class="text-sm font-semibold text-slate-700 mt-0.5">${status.subtitle}</div>
+                        </div>
+                    `;
+                } else if (status.state === "AFTER") {
+                    statusHtml = `
+                        <div class="mt-2.5 px-3 py-2.5 rounded-xl border bg-slate-50 border-slate-200/90 flex items-center justify-between">
+                            <span class="text-xs font-bold text-slate-600">✅ Po lekcjach obowiązkowych</span>
+                            <span class="text-xs font-semibold text-slate-500">od ${status.endTime}</span>
+                        </div>
+                    `;
+                } else {
+                    // Podgląd innego dnia tygodnia
+                    statusHtml = `
+                        <div class="mt-2.5 px-3 py-2.5 rounded-xl border bg-slate-50 border-slate-200/80 flex items-center justify-between text-xs">
+                            <span class="text-slate-600">
+                                Godziny: <strong class="text-slate-900">${status.start} – ${status.end}</strong>
+                            </span>
+                            <span class="text-slate-500">
+                                Start: <strong class="text-slate-700">${status.firstLesson.name}</strong>
+                            </span>
+                        </div>
+                    `;
+                }
+
+                // Lista wszystkich lekcji dnia (rozwijana)
+                const timelineHtml = lessons.map((l, idx) => {
+                    const isCurrent = status.state === "IN_CLASS" && status.activeIndex === idx;
+                    const isNext = status.state === "BREAK" && status.nextIndex === idx;
+                    const isPast = timeInfo.isTodayActive && timeInfo.minutes >= timeToMinutes(l.end);
+
+                    let rowClasses = "flex items-center justify-between py-2 px-2.5 rounded-xl text-xs border ";
+                    if (l.isPool) {
+                        rowClasses += isCurrent
+                            ? "bg-sky-100 border-sky-400 text-sky-950 font-bold shadow-xs"
+                            : "bg-sky-50/90 border-sky-200 text-sky-900 font-semibold";
+                    } else if (isCurrent) {
+                        rowClasses += "bg-emerald-50 border-emerald-300 text-slate-950 font-bold";
+                    } else if (isNext) {
+                        rowClasses += "bg-amber-50/70 border-amber-200 text-slate-900 font-semibold";
+                    } else if (isPast) {
+                        rowClasses += "bg-slate-50/50 border-transparent text-slate-400";
+                    } else {
+                        rowClasses += "bg-white border-slate-100 text-slate-700";
+                    }
+
+                    return `
+                        <div class="${rowClasses}">
+                            <div class="flex items-center gap-2 min-w-0">
+                                <span class="w-7 text-center font-bold text-[11px] px-1 py-0.5 rounded bg-black/5 shrink-0">${l.slot}</span>
+                                <span class="truncate">
+                                    ${l.isPool ? "🏊 " : ""}${l.name}
+                                </span>
+                            </div>
+                            <div class="flex items-center gap-1.5 shrink-0 ml-2 tabular-nums">
+                                <span class="text-[11px] opacity-80">${l.start}–${l.end}</span>
+                            </div>
+                        </div>
+                    `;
+                }).join("");
+
+                return `
+                    <article class="bg-white rounded-2xl p-4 border ${hasPool ? "border-sky-300 ring-1 ring-sky-200/70" : "border-slate-200/90"} shadow-sm transition">
+                        <!-- Górny pasek karty: Imię, klasa, odznaka BASEN oraz godzina końca -->
+                        <div class="flex items-start justify-between gap-2">
+                            <div>
+                                <div class="flex items-center gap-2 flex-wrap">
+                                    <h3 class="text-lg font-extrabold text-slate-900 leading-none">
+                                        ${kid.name}${kid.nickname ? ` <span class="text-sm font-semibold text-slate-400">(${kid.nickname})</span>` : ""}
+                                    </h3>
+                                    <span class="text-[11px] font-bold px-2 py-0.5 rounded-md ${kid.accentBg} ${kid.accentText} border ${kid.accentBorder}">
+                                        ${kid.className}
+                                    </span>
+                                    ${hasPool ? `
+                                        <span class="inline-flex items-center gap-1 text-[11px] font-extrabold px-2 py-0.5 rounded-md bg-sky-500 text-white shadow-xs">
+                                            🏊 BASEN
+                                        </span>
+                                    ` : ""}
+                                </div>
+                                ${startsLate ? `
+                                    <p class="text-[11px] font-semibold text-indigo-600 mt-1">
+                                        ⏰ Zaczyna później: o ${firstLesson.start} (od 2. lekcji)
+                                    </p>
+                                ` : ""}
+                            </div>
+
+                            <!-- Wyraźna godzina zakończenia obowiązkowych zajęć -->
+                            <div class="text-right shrink-0">
+                                <div class="inline-flex flex-col items-end px-2.5 py-1 rounded-xl ${hasPool ? "bg-sky-50 border border-sky-200" : "bg-slate-100 border border-slate-200/80"}">
+                                    <span class="text-[10px] font-bold uppercase tracking-wider ${hasPool ? "text-sky-700" : "text-slate-500"}">Koniec</span>
+                                    <span class="text-base font-extrabold tabular-nums leading-tight ${hasPool ? "text-sky-950" : "text-slate-900"}">
+                                        ${lastLesson ? lastLesson.end : "--:--"}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Aktualny status / informacja o lekcji -->
+                        ${statusHtml}
+
+                        <!-- Przycisk rozwijania listy lekcji -->
+                        <div class="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between">
+                            <button type="button" onclick="toggleKidPlan('${kid.id}')"
+                                class="w-full flex items-center justify-between text-xs font-semibold text-slate-500 hover:text-slate-800 py-0.5">
+                                <span>Plan dnia (${lessons.length} ${lessons.length === 1 ? "lekcja" : lessons.length < 5 ? "lekcje" : "lekcji"})</span>
+                                <span class="inline-flex items-center gap-1 text-slate-600">
+                                    ${isExpanded ? "Zwiń" : "Pokaż lekcje"}
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 transition-transform ${isExpanded ? "rotate-180" : ""}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="6 9 12 15 18 9"/>
+                                    </svg>
+                                </span>
+                            </button>
+                        </div>
+
+                        <!-- Rozwijana lista lekcji dnia -->
+                        <div class="${isExpanded ? "mt-2 space-y-1.5" : "hidden"}">
+                            ${timelineHtml}
+                        </div>
+                    </article>
+                `;
+            }).join("");
+        }
+
+        /**
+         * INTERAKCJE UŻYTKOWNIKA
+         */
+        function toggleKidPlan(kidId) {
+            if (allExpanded) {
+                // Jeśli wszystkie były rozwinięte globalnie, przejdź w tryb indywidualny
+                allExpanded = false;
+                KIDS_DATA.forEach(k => expandedCards[k.id] = true);
+                expandedCards[kidId] = false;
+                document.getElementById("toggleAllPlansBtn").textContent = "Cały dzień";
+            } else {
+                expandedCards[kidId] = !expandedCards[kidId];
+            }
+            renderApp();
+        }
+
+        // Przełączanie dni kliknięciem
+        document.querySelectorAll(".day-pill").forEach(btn => {
+            btn.addEventListener("click", () => {
+                selectedDay = Number(btn.dataset.day);
+                renderApp();
+            });
+        });
+
+        // Przycisk rozwinięcia/zwinięcia wszystkich planów
+        document.getElementById("toggleAllPlansBtn").addEventListener("click", (e) => {
+            allExpanded = !allExpanded;
+            if (!allExpanded) {
+                expandedCards = {};
+                e.currentTarget.textContent = "Cały dzień";
+            } else {
+                e.currentTarget.textContent = "Zwiń plany";
+            }
+            renderApp();
+        });
+
+        // Obsługa symulatora godziny
+        const simPanel = document.getElementById("simPanel");
+        const simBadge = document.getElementById("simBadge");
+        const simSlider = document.getElementById("simSlider");
+        const simTimeLabel = document.getElementById("simTimeLabel");
+
+        document.getElementById("toggleSimBtn").addEventListener("click", () => {
+            const isHidden = simPanel.classList.contains("hidden");
+            if (isHidden) {
+                simPanel.classList.remove("hidden");
+                isSimulatedTime = true;
+                simBadge.classList.remove("hidden");
+                simTimeLabel.textContent = minutesToHHMM(simulatedMinutes);
+            } else {
+                simPanel.classList.add("hidden");
+                isSimulatedTime = false;
+                simBadge.classList.add("hidden");
+            }
+            renderApp();
+        });
+
+        simSlider.addEventListener("input", (e) => {
+            isSimulatedTime = true;
+            simulatedMinutes = Number(e.target.value);
+            simTimeLabel.textContent = minutesToHHMM(simulatedMinutes);
+            simBadge.classList.remove("hidden");
+            renderApp();
+        });
+
+        document.getElementById("resetSimBtn").addEventListener("click", () => {
+            isSimulatedTime = false;
+            simPanel.classList.add("hidden");
+            simBadge.classList.add("hidden");
+            renderApp();
+        });
+
+        // Obsługa gestów przesuwania (swipe w lewo/prawo na ekranie telefonu)
+        let touchStartX = 0;
+        let touchStartY = 0;
+        const swipeArea = document.getElementById("swipeArea");
+
+        swipeArea.addEventListener("touchstart", (e) => {
+            touchStartX = e.changedTouches[0].screenX;
+            touchStartY = e.changedTouches[0].screenY;
+        }, { passive: true });
+
+        swipeArea.addEventListener("touchend", (e) => {
+            const deltaX = e.changedTouches[0].screenX - touchStartX;
+            const deltaY = e.changedTouches[0].screenY - touchStartY;
+
+            // Reaguj tylko na wyraźne poziome przesunięcie (ignoruj pionowe przewijanie)
+            if (Math.abs(deltaX) > 60 && Math.abs(deltaX) > Math.abs(deltaY) * 1.5) {
+                if (deltaX < 0 && selectedDay < 5) {
+                    selectedDay++;
+                    renderApp();
+                } else if (deltaX > 0 && selectedDay > 1) {
+                    selectedDay--;
+                    renderApp();
+                }
+            }
+        }, { passive: true });
+
+        // Start aplikacji i odświeżanie co sekundę
+        window.onload = function () {
+            renderApp();
+            setInterval(() => {
+                if (!isSimulatedTime) {
+                    renderApp();
+                }
+            }, 1000);
+        };
+    </script>
+</body>
+</html>
